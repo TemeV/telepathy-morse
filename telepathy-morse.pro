@@ -1,11 +1,29 @@
-
-QT = core dbus xml network
-
 TEMPLATE = app
 TARGET   = telepathy-morse
 
-#CONFIG  += dll
-#DEFINES += TELEGRAMQT_LIBRARY
+QT = core dbus xml network
+
+INSTALLS -= target
+target.path = /usr/libexec
+INSTALLS += target
+
+manager.files = morse.manager
+manager.path = /usr/share/telepathy/managers
+INSTALLS += manager
+
+service.files = org.freedesktop.Telepathy.ConnectionManager.morse.service
+service.path = /usr/share/dbus-1/services
+INSTALLS += service
+
+INCLUDEPATH += /usr/local/include/telepathy-qt5
+INCLUDEPATH += /usr/local/include/telegram-qt5
+
+LIBS += -lcrypto
+LIBS += -lz
+LIBS += -L/usr/local/lib
+LIBS += -ltelegram-qt5
+LIBS += -ltelepathy-qt5-service
+LIBS += -ltelepathy-qt5
 
 SOURCES = \
     main.cpp \
@@ -18,28 +36,7 @@ HEADERS = \
     protocol.hpp \
     textchannel.hpp
 
-
-INSTALLS -= target
-#target.files = $$TARGET
-target.path = /usr/local/libexec
-INSTALLS += target
-
-
-INCLUDEPATH += /usr/local/include/telepathy-qt5
-INCLUDEPATH += /usr/local/include/telegram-qt5
-
-#DEPENDPATH += /usr/local/lib
-
-LIBS += -lcrypto
-LIBS += -lz
-LIBS += -L/usr/local/lib
-LIBS += -ltelegram-qt5
-LIBS += -ltelepathy-qt5-service
-LIBS += -ltelepathy-qt5
-
-#unix: CONFIG += link_pkgconfig
-#unix: PKGCONFIG += telepathy-qt5
-
 OTHER_FILES += \
-    rpm/telepathy-morse.yaml
+    rpm/telepathy-morse.yaml \
+    rpm/telepathy-morse.spec
 
