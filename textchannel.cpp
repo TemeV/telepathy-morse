@@ -140,6 +140,51 @@ void MorseTextChannel::whenContactChatStateComposingChanged(const QString &phone
 
 void MorseTextChannel::whenMessageReceived(const TelegramNamespace::Message &message, uint senderHandle)
 {
+    if (message.type != TelegramNamespace::MessageTypeText) {
+        m_core->requestMessageMediaData(message.id);
+        m_pendingTelegramMessages.insert(message.id, PendingTelegramMessage(message, senderHandle));
+        qDebug() << "Media message pending";
+        connect(m_core, SIGNAL(messageMediaDataReceived(QString,quint32,QByteArray,QString,TelegramNamespace::MessageType,quint32,quint32)),
+                this, SLOT(whenMessageMediaDataReceived(QString,quint32,QByteArray,QString,TelegramNamespace::MessageType,quint32,quint32)));
+
+   } else{
+        processReceivedMessage(message, senderHandle);
+    }
+}
+
+void MorseTextChannel::whenMessageMediaDataReceived(const QString &contact, quint32 messageId, const QByteArray &data, const QString &mimeType, TelegramNamespace::MessageType type, quint32 offset, quint32 size)
+{
+    qDebug() << Q_FUNC_INFO <<
+                " contact: " << contact <<
+                " messageId:" << messageId <<
+//                " data:" << data <<
+                " mimeType:" << mimeType <<
+                " type:" << type <<
+                " offset:" << offset <<
+                " size:" << size;
+
+    PendingMessageData pendingData = m_pendingMessageData.value(messageId, PendingMessageData());
+    pendingData.data.append(data);
+    pendingData.mimeType = mimeType;
+    m_pendingMessageData.insert(messageId, pendingData);
+
+    if (pendingData.data.size() == size)
+    {
+        PendingTelegramMessage pendingMessage = m_pendingTelegramMessages.value(messageId);
+        processReceivedMessage(pendingMessage.message, pendingMessage.senderHandle);
+        m_pendingMessageData.remove(messageId);
+        m_pendingTelegramMessages.remove(messageId);
+
+        if (m_pendingTelegramMessages.isEmpty())
+        {
+            disconnect(m_core, SIGNAL(messageMediaDataReceived(QString,quint32,QByteArray,QString,TelegramNamespace::MessageType,quint32,quint32)),
+                       this, SLOT(whenMessageMediaDataReceived(QString,quint32,QByteArray,QString,TelegramNamespace::MessageType,quint32,quint32)));
+        }
+    }
+}
+
+void MorseTextChannel::processReceivedMessage(const TelegramNamespace::Message &message, uint senderHandle)
+{
     QString contactID;
     if (m_targetHandleType == Tp::HandleTypeContact) {
         contactID = m_targetID;
@@ -154,14 +199,17 @@ void MorseTextChannel::whenMessageReceived(const TelegramNamespace::Message &mes
     Tp::MessagePartList body;
     Tp::MessagePart text;
     text[QLatin1String("content-type")] = QDBusVariant(QLatin1String("text/plain"));
-
-    if (message.type == TelegramNamespace::MessageTypeText) {
-        text[QLatin1String("content")] = QDBusVariant(message.text);
-    } else {
-        text[QLatin1String("content")] = QDBusVariant(tr("Telepathy-Morse doesn't support multimedia messages yet."));
-    }
-
+    text[QLatin1String("content")]      = QDBusVariant(message.text);
     body << text;
+
+    if (message.type != TelegramNamespace::MessageTypeText)
+    {
+        PendingMessageData messageData = m_pendingMessageData.value(message.id);
+        Tp::MessagePart data;
+        data[QLatin1String("content-type")]    = QDBusVariant(messageData.mimeType);
+        data[QLatin1String("content")]         = QDBusVariant(messageData.data);
+        body << data;
+    }
 
     Tp::MessagePartList partList;
     Tp::MessagePart header;

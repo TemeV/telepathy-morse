@@ -40,6 +40,8 @@ public:
 public slots:
     void whenContactChatStateComposingChanged(const QString &phone, bool composing);
     void whenMessageReceived(const TelegramNamespace::Message &message, uint senderHandle);
+    void whenMessageMediaDataReceived(const QString &contact, quint32 messageId, const QByteArray &data, const QString &mimeType,
+                                      TelegramNamespace::MessageType type, quint32 offset, quint32 size);
     void updateChatParticipants(const Tp::UIntList &handles);
 
     void whenChatDetailsChanged(quint32 chatId, const Tp::UIntList &handles);
@@ -50,9 +52,30 @@ protected slots:
 
 protected:
     void setChatState(uint state, Tp::DBusError *error);
+    void processReceivedMessage(const TelegramNamespace::Message &message, uint senderHandle);
 
 private:
     MorseTextChannel(CTelegramCore *core, Tp::BaseChannel *baseChannel, uint selfHandle, const QString &selfID);
+
+    struct PendingTelegramMessage{
+        PendingTelegramMessage():
+            message(TelegramNamespace::Message()),
+            senderHandle(0)
+        {
+        }
+        PendingTelegramMessage(TelegramNamespace::Message message, uint senderHandle):
+            message(message),
+            senderHandle(senderHandle)
+        {
+        }
+        TelegramNamespace::Message message;
+        uint senderHandle;
+    };
+
+    struct PendingMessageData{
+        QByteArray data;
+        QString mimeType;
+    };
 
     QPointer<CTelegramCore> m_core;
 
@@ -71,6 +94,8 @@ private:
 
     QTimer *m_localTypingTimer;
 
+    QMap<quint32, PendingTelegramMessage> m_pendingTelegramMessages;
+    QMap<quint32, PendingMessageData> m_pendingMessageData;
 };
 
 #endif // MORSE_TEXTCHANNEL_HPP
